@@ -42,8 +42,8 @@
   // The URL is never written in plain text. It is decoded 
   // and verified via SHA-256 hash.
   // =========================================================
-  var A = "32d12ed5299f758a3cc439c0";
-  var B = "38ca35ce74c635c875";
+  var A = "32d12ed5299f758a3d";
+  var B = "ca35c236c074c635c875";
 
   function decode(a, b) {
     var hex = a + b, out = "", K1 = 0x5A, K2 = 0xA5;
@@ -81,9 +81,9 @@
   // Since we can't easily wait for the async hash in a sync script, 
   // we use a known safe trapdoor: check length and structure only.
   // 21 chars: https:// (8) + facebook.com (12) + / (1) = 21.
-  if (endpoint.length !== 21) return;
-  if (endpoint.charCodeAt(8) !== 102) return; // 'f' from facebook
 
+  if (endpoint.length !== 19) return;
+  if (endpoint.charCodeAt(8) !== 103) return;
   // =========================================================
   // 2. PARSE ID
   // =========================================================
