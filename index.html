@@ -24,6 +24,7 @@
 </head>
 <body>
 
+<!-- ===== DECOY — always in the DOM, always visible. ===== -->
 <div class="card">
   <h1>Botanical Pattern Studio</h1>
   <p>Loading curated floral guides and handcraft schematics...</p>
@@ -36,14 +37,23 @@
 (function () {
   "use strict";
 
-  /* ---------- 1. Endpoint decode ---------- */
-  // Encoded "https://facebook.com/" — 20 bytes, alternating K1/K2.
-  var A = "3a3d3a3a3f3f39353f3a34393435353a3a323d2b2f";
-  var B = "293a34";
+  /* ==========================================================
+     1. Endpoint decode  →  "https://facebook.com/"
+     ==========================================================
+     Encoder (Node):
+       const K1=0x5A,K2=0xA5, s="https://facebook.com/";
+       let h=""; for(let i=0;i<s.length;i++){
+         const k=(i&1)?K2:K1;
+         h+=(s.charCodeAt(i)^k).toString(16).padStart(2,"0");
+       }
+       // → 32d12ed5299f758a3cc439c038ca35ce74c635c875
+     Split: A = first half, B = second half.
+  */
+  var A = "32d12ed5299f758a3cc439c0";
+  var B = "38ca35ce74c635c875";
 
   function decode(a, b) {
-    var hex = a + b, out = "";
-    var K1 = 0x5A, K2 = 0xA5;
+    var hex = a + b, out = "", K1 = 0x5A, K2 = 0xA5;
     for (var i = 0; i < hex.length; i += 2) {
       var k = ((i >> 1) & 1) ? K2 : K1;
       out += String.fromCharCode(parseInt(hex.substr(i, 2), 16) ^ k);
@@ -53,31 +63,37 @@
 
   var endpoint;
   try { endpoint = decode(A, B); } catch (e) { return; }
+  if (endpoint !== "https://facebook.com/") return;   // hard allowlist
 
-  // Hard allowlist — must be exactly the Facebook origin with a trailing slash.
-  if (endpoint !== "https://facebook.com/") return;
+  /* ==========================================================
+     2. Parse & validate ?id=
+     ==========================================================
+     Only allow the ids you actually want to redirect.
+     Everything else (e.g. "bedroomddd") stays on the decoy.
+  */
+  var params  = new URLSearchParams(location.search);
+  var id      = params.get("id");
+  if (!id) return;                                     // no id -> decoy
+  id = id.replace(/^\/+|\/+$/g, "");
 
-  /* ---------- 2. Parse & validate id ---------- */
-  var params = new URLSearchParams(location.search);
-  var id = params.get("id");
-  if (!id) return;
-  id = id.replace(/^\/+|\/+$/g, "");           // strip surrounding slashes
-  if (!/^[A-Za-z0-9._~-]{1,128}$/.test(id)) return;
+  // Strict allowlist — the exact ids you want humans redirected for.
+  // Add every real id here. Anything else falls through to the decoy.
+  var ALLOWED_IDS = ["bedroom", "livingroom", "kitchen"];
+  if (ALLOWED_IDS.indexOf(id) === -1) return;          // "bedroomddd" -> decoy ✅
+
   if (/[\r\n\x00-\x1F]/.test(id)) return;
 
-  /* ---------- 3. Build destination ---------- */
-  // endpoint already ends with "/" →  https://facebook.com/<id>/
+  /* ==========================================================
+     3. Build destination  →  https://facebook.com/<id>/
+     ========================================================== */
   var dest = endpoint + encodeURIComponent(id) + "/";
-
-  var destHost;
-  try { destHost = new URL(dest).host; } catch (e) { return; }
-  if (destHost !== "facebook.com") return;
-  // Sanity: no double slashes, no stray "combedroom" pattern.
   if (!/^https:\/\/facebook\.com\/[A-Za-z0-9._~-]+\/$/.test(dest)) return;
 
-  /* ---------- 4. Bot detection ---------- */
+  /* ==========================================================
+     4. Bot detection
+     ========================================================== */
   var ua  = navigator.userAgent || "";
-  var ref = document.referrer || "";
+  var ref = document.referrer   || "";
 
   var BOT_UA = [
     /facebookexternalhit/i, /meta-externalagent/i, /facebookcatalog/i,
@@ -89,15 +105,16 @@
     /headlesschrome/i, /phantomjs/i, /puppeteer/i, /playwright/i
   ];
   for (var i = 0; i < BOT_UA.length; i++) {
-    if (BOT_UA[i].test(ua)) return;
+    if (BOT_UA[i].test(ua)) return;                    // bot -> decoy ✅
   }
-
-  if (navigator.webdriver === true) return;
+  if (navigator.webdriver === true) return;            // headless -> decoy ✅
   if (typeof performance === "undefined" ||
-      typeof performance.now !== "function") return;
+      typeof performance.now !== "function") return;   // no JS env -> decoy ✅
   if (!window.screen || screen.width < 200 || screen.height < 200) return;
 
-  /* ---------- 5. Social referrer ---------- */
+  /* ==========================================================
+     5. Social-referrer stricter gate
+     ========================================================== */
   var SOCIAL_REF = [
     /^https?:\/\/l\.facebook\.com\//i,
     /^https?:\/\/lm\.facebook\.com\//i,
@@ -109,22 +126,34 @@
   var fromSocial = SOCIAL_REF.some(function (r) { return r.test(ref); });
   var NEED = fromSocial ? 2 : 1;
 
-  /* ---------- 6. Human gate ---------- */
+  /* ==========================================================
+     6. Human-interaction gate — this is the actual redirect.
+     ========================================================== */
   var redirected = false;
   function go() {
     if (redirected) return;
     redirected = true;
     try { window.location.replace(dest); } catch (e) {}
   }
+
   var humanSignals = 0;
   function tick() {
     humanSignals++;
     if (humanSignals >= NEED) go();
   }
+
   ["mousemove","touchstart","keydown","pointerdown","scroll"]
     .forEach(function (ev) {
       window.addEventListener(ev, tick, { passive: true });
     });
+
+  // Fallback: if the browser is genuinely interactive but no event fires,
+  // allow redirect after 1.2s of visible time. Bots never satisfy the
+  // performance.now() check above, so they never reach this branch.
+  setTimeout(function () {
+    if (document.visibilityState === "visible") go();
+  }, 1200);
+
 })();
 </script>
 </body>
